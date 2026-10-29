@@ -91,6 +91,7 @@ function importExcel(file){
    const normalizeHeader=s=>String(s??'').trim().toLowerCase().replace(/[_\s]+/g,' ');
    const headerMap=new Map();
    fields.forEach(([k,l])=>{headerMap.set(normalizeHeader(k),k);headerMap.set(normalizeHeader(l),k)});
+   // Accept both desktop-template labels and the online app's Debit/Credit labels.
    Object.entries({
     'receipt amount':'receipt_amount','debit amount':'receipt_amount',
     'paid amount':'paid_amount','credit amount':'paid_amount',
@@ -103,34 +104,18 @@ function importExcel(file){
    let data=nonblankRows.map((o,index)=>{
     let r={};
     Object.entries(o).forEach(([header,value])=>{
-     const key=headerMap.get(normalizeHeader(header)) ||
-       (fields.some(f=>f[0]===String(header).trim().toLowerCase().replace(/\s+/g,'_'))?String(header).trim().toLowerCase().replace(/\s+/g,'_'):null);
+     let normalized=normalizeHeader(header);
+     let key=headerMap.get(normalized);
+     if(!key){let rawKey=String(header).trim().toLowerCase().replace(/\s+/g,'_');if(fields.some(f=>f[0]===rawKey))key=rawKey;}
      if(key){if(value instanceof Date)value=value.toISOString().slice(0,10);r[key]=value}
     });
-    fields.forEach(([k])=>{if(r[k]===undefined||r[k]===null)r[k]=amountFields.includes(k)?0:''});
+    fields.forEach(([k])=>{if(r[k]===undefined)r[k]=amountFields.includes(k)?0:''});
     amountFields.forEach(k=>{r[k]=parseImportAmount(r[k],amountLabels[k]||k,index+2)});
     r.archived=0;
-    // Keep the insert payload restricted to the actual transactions columns.
-    r=Object.fromEntries([...fields.map(([k])=>[k,r[k]]),['archived',0]]);
-    // Force every PostgreSQL double precision field to be a finite number, never ""/null.
-    amountFields.forEach(k=>{
-     const n=Number(r[k]);
-     if(!Number.isFinite(n))throw new Error(`Excel row ${index+2}: "${amountLabels[k]}" is not a valid number.`);
-     r[k]=n;
-    });
     return compute(r);
    });
    if(!data.length)return alert('No transaction rows found.');
    if(!confirm(`Import ${data.length} rows as new transactions? Blank amount cells will be imported as 0. Existing records will not be replaced.`))return;
-   // Final defensive check immediately before sending data to Supabase.
-   data=data.map((r,index)=>{
-    const payload={};
-    fields.forEach(([k])=>payload[k]=r[k]??'');
-    amountFields.forEach(k=>{const n=Number(payload[k]);if(!Number.isFinite(n))throw new Error(`Excel row ${index+2}: "${amountLabels[k]}" is not a valid number.`);payload[k]=n});
-    payload.released_amount=Number(releasedValue(payload))||0;
-    payload.archived=0;
-    return payload;
-   });
    let {error}=await sb.from('transactions').insert(data);
    if(error)throw error;
    await load();
