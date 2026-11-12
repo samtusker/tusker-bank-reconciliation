@@ -123,6 +123,8 @@ main{max-width:1900px;padding:22px clamp(12px,2.5vw,34px);margin:auto}
 <div class="panel"><div class="filterbar"><label>Search all columns<input id="searchBox" placeholder="Search transactions…"></label><label>Status filter<select id="statusFilter"><option value="">All statuses</option></select></label><label>From date<input id="fromDate" type="date"></label><label>To date<input id="toDate" type="date"></label><label>Released amount above<input id="minReleased" type="number" value="" placeholder="Any amount" step="0.01"></label><button id="applyFilters">Apply Filters</button><button class="secondary" id="resetFilters">Reset</button><label style="flex-direction:row;align-items:center"><input type="checkbox" id="showDuplicates"> Show duplicates only</label></div></div>
 <div class="toolbar no-print" id="chequeAlertsToggleBar"><button class="secondary" id="toggleChequeAlerts" type="button" aria-controls="chequeAlertsPanel" aria-expanded="false">Show Upcoming Cheque Alerts</button></div>
 <div class="panel no-print" id="chequeAlertsPanel" style="display:none"><b>Upcoming Cheque Alerts</b><p class="note">Active, uncleared cheques with a cheque date. Counts are based on today's date and exclude archived and cleared transactions.</p><div class="alert-summary" id="chequeAlertSummary"></div><div class="alert-table"><table><thead><tr><th>Customer Name</th><th>Cheque No</th><th>Cheque Date</th><th>Credit Amount (AED)</th><th>Status</th><th>Due</th></tr></thead><tbody id="chequeAlertRows"></tbody></table></div></div>
+<div class="toolbar no-print"><button class="secondary" type="button" id="toggleOutstandingMatch" aria-controls="outstandingMatchPanel" aria-expanded="false">Show Outstanding Statement Matching</button></div>
+<div class="panel no-print" id="outstandingMatchPanel" style="display:none"><b>Outstanding Statement Matching</b><p class="note">Compare the accounting software's outstanding-only reconciliation statement with all Tusker transactions. Read-only: no database changes. An item absent from this statement is not proof of bank clearance.</p><div class="toolbar"><label>Outstanding statement (.xlsx, .xls, .csv)<input type="file" id="outstandingMatchFile" accept=".xlsx,.xls,.csv"></label><button class="secondary" type="button" id="outstandingMatchExport" disabled>Export Comparison Excel</button></div><div id="outstandingMatchInfo" class="note" role="status">Select your outstanding reconciliation statement to compare.</div><div id="outstandingMatchCounts" class="alert-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"></div><div class="table-wrap" style="max-height:420px"><table style="white-space:normal;min-width:850px"><thead><tr><th>Result</th><th>Statement Particulars</th><th>Instrument No.</th><th>Instrument Date</th><th>Statement Amount (AED)</th><th>Tusker ID</th><th>Tusker Customer</th><th>Tusker Cheque No.</th><th>Tusker Amount (AED)</th><th>Details</th></tr></thead><tbody id="outstandingMatchRows"></tbody></table></div></div>
 <div class="panel"><div class="print-title hidden" id="printTitle"><h2>Tusker Bank Reconciliation</h2></div><div class="table-wrap"><table id="register"><thead><tr id="headRow"></tr></thead><tbody id="tbody"></tbody><tfoot id="tfoot"></tfoot></table></div><div class="footer"><span id="rowCount">0 transactions</span><span id="filteredTotals"></span></div></div>
 <div class="toolbar"><button class="secondary" id="togglePrintLayout" type="button" aria-controls="printLayoutPanel" aria-expanded="false">Show Print Layout</button></div>
 <div class="panel" id="printLayoutPanel" style="display:none"><b>Print layout</b><p class="note">Choose the headings to include in print. The selection is saved in this browser.</p><div class="checkgrid" id="printChecks"></div><label style="margin-top:10px;flex-direction:row;align-items:center"><input type="checkbox" id="printBalances" checked> Print balance summary and selected amount totals</label><div class="checkgrid" style="margin-top:8px"><label style="flex-direction:row;align-items:center"><input type="checkbox" id="printCurrentBalance" checked> Current Bank Balance</label><label style="flex-direction:row;align-items:center"><input type="checkbox" id="printTotalReleased" checked> Total Released Amount</label><label style="flex-direction:row;align-items:center"><input type="checkbox" id="printAvailableBalance" checked> Available Balance</label></div><div class="toolbar"><button id="savePrintLayout">Save Layout as Default</button><button class="secondary" id="changePrintLayout">Change Layout</button></div></div>
@@ -184,6 +186,64 @@ $('forgotLink').onclick=e=>{e.preventDefault();alert('For username or password a
   const observer=new MutationObserver(()=>{if(panel.style.display!=='none')update()});
   const target=document.getElementById('rowCount');
   if(target)observer.observe(target,{childList:true,characterData:true,subtree:true});
+})();
+</script>
+<script id="tusker-outstanding-matching">
+(function(){
+'use strict';
+const panel=document.getElementById('outstandingMatchPanel');
+const toggle=document.getElementById('toggleOutstandingMatch');
+const input=document.getElementById('outstandingMatchFile');
+const info=document.getElementById('outstandingMatchInfo');
+const counts=document.getElementById('outstandingMatchCounts');
+const body=document.getElementById('outstandingMatchRows');
+const exportBtn=document.getElementById('outstandingMatchExport');
+let comparison=[];
+toggle.addEventListener('click',()=>{const show=panel.style.display==='none';panel.style.display=show?'':'none';toggle.textContent=(show?'Hide':'Show')+' Outstanding Statement Matching';toggle.setAttribute('aria-expanded',String(show));});
+const clean=v=>String(v??'').trim();
+const cheque=v=>clean(v).replace(/\.0$/,'').replace(/[^a-zA-Z0-9]/g,'').replace(/^0+(?=\d)/,'').toUpperCase();
+const amount=v=>{if(typeof v==='number')return Number.isFinite(v)?v:0;let t=clean(v).replace(/,/g,'').replace(/\s/g,'');if(/^\(.*\)$/.test(t))t='-'+t.slice(1,-1);return Number(t)||0;};
+const cents=v=>Math.round(amount(v)*100);
+const date=v=>{if(v instanceof Date&&!isNaN(v))return [v.getFullYear(),String(v.getMonth()+1).padStart(2,'0'),String(v.getDate()).padStart(2,'0')].join('-');if(typeof v==='number'&&v>20000&&v<90000){let d=XLSX.SSF.parse_date_code(v);return d?`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`:'';}let t=clean(v);if(/^\d{4}-\d\d-\d\d/.test(t))return t.slice(0,10);let d=new Date(t);return !isNaN(d)?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';};
+const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=v=>amount(v).toLocaleString('en-AE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const label=v=>clean(v).toLowerCase().replace(/[^a-z0-9]/g,'');
+const equal=(a,b)=>cents(a)===cents(b);
+function build(statement,existing){
+ const used=new Set();const out=[];
+ const candidates=existing.map((r,i)=>({r,i,number:cheque(r.cheque_no),value:cents(r.paid_amount)-cents(r.receipt_amount)}));
+ for(const st of statement){
+  const num=cheque(st.instrument);const val=cents(st.credit)-cents(st.debit);
+  const all=candidates.filter(x=>num&&x.number===num);
+  const exact=all.filter(x=>x.value===val);
+  const unusedExact=exact.filter(x=>!used.has(x.i));
+  let picked=null,result='',details='';
+  if(unusedExact.length===1){picked=unusedExact[0];used.add(picked.i);result='Outstanding in both';details='Cheque number and signed amount match';}
+  else if(unusedExact.length>1){result='Ambiguous duplicate';details=`${unusedExact.length} Tusker transactions share this cheque number and amount; manual review required`;}
+  else if(exact.length){result='Possible duplicate';details='Statement cheque and amount already matched to another statement row';}
+  else if(all.length){result='Amount mismatch';details='Cheque number found but signed amount differs';if(all.length===1)picked=all[0];}
+  else {const possible=candidates.filter(x=>!used.has(x.i)&&x.value===val&&val!==0&&(!st.instrumentDate||!x.r.cheque_date||Math.abs(new Date(st.instrumentDate)-new Date(x.r.cheque_date))<=7*86400000));result=possible.length?'Possible match':'Missing from Tusker';details=possible.length?`${possible.length} candidate(s) by amount and date; cheque number not matched`:'No matching cheque number found';}
+  out.push({result,st,t:picked?.r||null,details});
+ }
+ for(const x of candidates){if(used.has(x.i))continue;
+  // A mismatched or ambiguous cheque may have been represented already; still show the Tusker record separately for full transparency.
+  out.push({result:'Not on outstanding statement',st:null,t:x.r,details:'Not proof of clearance; verify with bank/accounting records'});
+ }
+ return out;
+}
+function draw(){const tally={};comparison.forEach(x=>tally[x.result]=(tally[x.result]||0)+1);counts.innerHTML=Object.entries(tally).map(([k,n])=>`<span class="badge">${safe(k)}: ${n}</span>`).join('');body.innerHTML=comparison.map(({result,st,t,details})=>`<tr><td>${safe(result)}</td><td>${safe(st?.particulars)}</td><td>${safe(st?.instrument)}</td><td>${safe(st?.instrumentDate)}</td><td>${st?fmt(amount(st.credit)-amount(st.debit)):''}</td><td>${safe(t?.id)}</td><td>${safe(t?.customer_name)}</td><td>${safe(t?.cheque_no)}</td><td>${t?fmt(amount(t.paid_amount)-amount(t.receipt_amount)):''}</td><td>${safe(details)}</td></tr>`).join('');exportBtn.disabled=!comparison.length;}
+input.addEventListener('change',async()=>{const file=input.files?.[0];if(!file)return;info.textContent='Reading and comparing statement…';comparison=[];counts.innerHTML='';body.innerHTML='';exportBtn.disabled=true;try{
+ const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});let statement=[];
+ for(const sheet of wb.SheetNames){const data=XLSX.utils.sheet_to_json(wb.Sheets[sheet],{header:1,defval:'',raw:true});const at=data.findIndex(row=>{const h=row.map(label);return h.includes('instrumentno')&&h.includes('debit')&&h.includes('credit')&&h.includes('particulars');});if(at<0)continue;
+ const header=data[at].map(label);const col=k=>header.indexOf(k);
+ for(const row of data.slice(at+1)){const instrument=clean(row[col('instrumentno')]);const particulars=clean(row[col('particulars')]);const credit=amount(row[col('credit')]);const debit=amount(row[col('debit')]);if(!instrument&&!particulars)continue;if(!instrument&&!credit&&!debit)continue;if(/^(total|grand total|closing balance|opening balance)$/i.test(particulars))continue;statement.push({instrument,particulars,credit,debit,instrumentDate:date(row[col('instrumentdate')]),bankDate:date(row[col('bankdate')])});}
+ }
+ if(!statement.length)throw Error('No outstanding transactions found. Expected headings: Particulars, Instrument No., Instrument Date, Debit, Credit.');
+ if(typeof rows==='undefined'||!Array.isArray(rows))throw Error('Please sign in and load Tusker transactions first.');
+ comparison=build(statement,rows.filter(r=>!r.archived&&r.status!=='Cleared'));
+ draw();info.textContent=`Compared ${statement.length} outstanding statement entries with ${rows.filter(r=>!r.archived&&r.status!=='Cleared').length} active, uncleared Tusker transactions. This is a snapshot; re-import after changes. Amounts compare signed Credit minus Debit; ambiguous matches require review.`;
+ }catch(e){info.textContent='Comparison failed: '+(e.message||e);}});
+exportBtn.addEventListener('click',()=>{if(!comparison.length)return;const data=comparison.map(({result,st,t,details})=>({'Result':result,'Statement Particulars':st?.particulars||'','Instrument No.':st?.instrument||'','Instrument Date':st?.instrumentDate||'','Statement Signed Amount':st?amount(st.credit)-amount(st.debit):'','Tusker ID':t?.id??'','Tusker Customer':t?.customer_name||'','Tusker Cheque No.':t?.cheque_no||'','Tusker Signed Amount':t?amount(t.paid_amount)-amount(t.receipt_amount):'','Details':details}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),'Outstanding Comparison');XLSX.writeFile(wb,'Tusker_Outstanding_Comparison.xlsx');});
 })();
 </script>
 </body></html>
