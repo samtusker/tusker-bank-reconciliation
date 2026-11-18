@@ -191,29 +191,37 @@ main{max-width:1900px;padding:22px clamp(12px,2.5vw,34px);margin:auto}
 </style>
 <style id="tusker-improved-dark-theme">
 /* Dashboard-only dark styling. Login, print, data and event handlers remain unchanged. */
-html[data-tusker-theme="dark"]{color-scheme:dark;--bg:#151a24;--panel:#202938;--line:#3a475b;--txt:#eef3fb;--muted:#b2c0d3;--input:#263346;--navy:#315c91;--shadow:0 8px 26px rgba(0,0,0,.18)}
+html[data-tusker-theme="dark"]{color-scheme:dark;--bg:#292D32;--panel:#383D43;--line:#59616A;--txt:#E8EAED;--muted:#BCC3CA;--input:#454B52;--navy:#398F88;--shadow:0 8px 26px rgba(0,0,0,.18)}
 html[data-tusker-theme="dark"] body{background:var(--bg);color:var(--txt)}
-html[data-tusker-theme="dark"] .top{background:rgba(28,37,52,.96);border-bottom-color:#38475b;box-shadow:0 3px 16px #0003}
-html[data-tusker-theme="dark"] .top h1,html[data-tusker-theme="dark"] .metric strong{color:#e6f0ff}
+html[data-tusker-theme="dark"] .top{background:rgba(49,53,59,.97);border-bottom-color:#59616A;box-shadow:0 3px 16px #0003}
+html[data-tusker-theme="dark"] .top h1,html[data-tusker-theme="dark"] .metric strong{color:#F0F1F2}
 html[data-tusker-theme="dark"] .metric,html[data-tusker-theme="dark"] .panel,html[data-tusker-theme="dark"] .modalbox{background:var(--panel);color:var(--txt);border-color:var(--line)}
 html[data-tusker-theme="dark"] .metric small,html[data-tusker-theme="dark"] label,html[data-tusker-theme="dark"] .note,html[data-tusker-theme="dark"] .footer{color:var(--muted)}
-html[data-tusker-theme="dark"] input,html[data-tusker-theme="dark"] select,html[data-tusker-theme="dark"] textarea,html[data-tusker-theme="dark"] .modalbox input{background:var(--input);color:var(--txt);border-color:#506078}
-html[data-tusker-theme="dark"] input:focus,html[data-tusker-theme="dark"] select:focus,html[data-tusker-theme="dark"] textarea:focus{border-color:#8db7f0;box-shadow:0 0 0 3px #6a9dd12c}
-html[data-tusker-theme="dark"] button.secondary{background:#34445b;color:#eef3fb;border-color:#506078}
-html[data-tusker-theme="dark"] .table-wrap{background:#202938;border-color:var(--line)}
-html[data-tusker-theme="dark"] table{color:#e5ecf7}
-html[data-tusker-theme="dark"] th{background:#31425b;color:#ffe0ed}
-html[data-tusker-theme="dark"] th button{background:#455c7a;color:#f2f6ff}
-html[data-tusker-theme="dark"] tbody tr,html[data-tusker-theme="dark"] tbody tr:nth-child(even){background:#202938}
-html[data-tusker-theme="dark"] tbody tr:nth-child(even){background:#253144}
-html[data-tusker-theme="dark"] tbody tr:hover{background:#344861}
-html[data-tusker-theme="dark"] tbody tr.selected-row{outline-color:#f3b4d0}
-html[data-tusker-theme="dark"] tbody tr.duplicate{background:#573441;color:#ffe6e9}
-html[data-tusker-theme="dark"] tbody tr.archived{background:#2a3546}
-html[data-tusker-theme="dark"] .total-row{background:#34445d;color:#fff}
-html[data-tusker-theme="dark"] .badge{background:#354760;color:#e2eeff}
-html[data-tusker-theme="dark"] #registerMobileCards .mobile-transaction-card{background:#263346;color:#eef3fb;border-color:#465a74}
+html[data-tusker-theme="dark"] input,html[data-tusker-theme="dark"] select,html[data-tusker-theme="dark"] textarea,html[data-tusker-theme="dark"] .modalbox input{background:var(--input);color:var(--txt);border-color:#667079}
+html[data-tusker-theme="dark"] input:focus,html[data-tusker-theme="dark"] select:focus,html[data-tusker-theme="dark"] textarea:focus{border-color:#73C7BE;box-shadow:0 0 0 3px #58B7AC2c}
+html[data-tusker-theme="dark"] button.secondary{background:#474D54;color:#E8EAED;border-color:#667079}
+html[data-tusker-theme="dark"] .table-wrap{background:#383D43;border-color:var(--line)}
+html[data-tusker-theme="dark"] table{color:#E8EAED}
+html[data-tusker-theme="dark"] th{background:#41474E;color:#E8EAED}
+html[data-tusker-theme="dark"] th button{background:#515961;color:#E8EAED}
+html[data-tusker-theme="dark"] tbody tr,html[data-tusker-theme="dark"] tbody tr:nth-child(even){background:#383D43}
+html[data-tusker-theme="dark"] tbody tr:nth-child(even){background:#3C4248}
+html[data-tusker-theme="dark"] tbody tr:hover{background:#50575E}
+html[data-tusker-theme="dark"] tbody tr.selected-row{outline-color:#58B7AC}
+html[data-tusker-theme="dark"] tbody tr.duplicate{background:#594044;color:#F4DEE1}
+html[data-tusker-theme="dark"] tbody tr.archived{background:#42474D}
+html[data-tusker-theme="dark"] .total-row{background:#414E4E;color:#fff}
+html[data-tusker-theme="dark"] .badge{background:#47565A;color:#E8EAED}
+html[data-tusker-theme="dark"] #registerMobileCards .mobile-transaction-card{background:#454B52;color:#E8EAED;border-color:#59616A}
 @media print{html[data-tusker-theme="dark"] body{background:#fff!important;color:#111!important}html[data-tusker-theme="dark"] th{background:#eee!important;color:#111!important}html[data-tusker-theme="dark"] table{color:#111!important}html[data-tusker-theme="dark"] tbody tr,html[data-tusker-theme="dark"] tbody tr:nth-child(even){background:#fff!important}}
+
+/* Color-only refinements: retain all original sizes, positions and behavior. */
+html[data-tusker-theme="dark"] body > :not(#loginScreen) button:not(.secondary):not(.danger){background:#398F88;color:#F5FAF9}
+html[data-tusker-theme="dark"] body > :not(#loginScreen) button:not(.secondary):not(.danger):hover{background:#46A69C}
+html[data-tusker-theme="dark"] .top .muted{color:#BCC3CA}
+html[data-tusker-theme="dark"] tbody tr.duplicate{background:#594044;color:#F4DEE1}
+html[data-tusker-theme="dark"] .table-wrap:not(.mobile-table-view) #register tbody tr{border-color:#59616A}
+@media print{html[data-tusker-theme="dark"] body > :not(#loginScreen) button{background:initial;color:initial}}
 /* Keep the original login screen completely independent of dashboard dark mode. */
 html[data-tusker-theme="dark"] #loginScreen{color-scheme:light;--bg:#f4f6fb;--panel:#fff;--line:#e1e7f0;--txt:#1c2738;--muted:#6d7b90;--input:#fff;--navy:#163b65}
 html[data-tusker-theme="dark"] #loginScreen label{color:#334b6a}
