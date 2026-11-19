@@ -345,7 +345,7 @@ function formData(){let r={};fields.forEach(([k])=>{let el=$('f_'+k);r[k]=el?el.
 function fillForm(r){selectedId=r.id;fields.forEach(([k])=>{let el=$('f_'+k);if(el)el.value=(k==='status'&&String(r[k]??'').trim()==='Sing HO')?'Sign HO':r[k]??''});$('f_released_amount').value=money(releasedValue(r));$('addBtn').textContent='Add New Transaction';$('updateBtn').disabled=!canEdit();$('entryFields').scrollIntoView({behavior:'smooth',block:'nearest'});}
 function recalcReleased(){let s=$('f_status').value,p=num($('f_paid_amount').value),d=$('f_cheque_date').value;let r={status:s,paid_amount:p,cheque_date:d};$('f_released_amount').value=money(releasedValue(r))}
 async function load(){let all=[],start=0;while(true){let tx=await sb.from('transactions').select('*').order('id',{ascending:true}).range(start,start+999);if(tx.error)throw tx.error;all.push(...(tx.data||[]));if((tx.data||[]).length<1000)break;start+=1000}let setting=await sb.from('settings').select('value').eq('key','bank_balance').maybeSingle();if(setting.error)throw setting.error;rows=all.map(compute);$('bankBalance').value=setting.data?.value??'0';render()}
-async function login(){ $('loginError').textContent='';$('loginBtn').disabled=true;try{let {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;user=data.user;let q=await sb.from('user_roles').select('role').eq('user_id',user.id).maybeSingle();if(q.error)throw q.error;if(!q.data?.role){await sb.auth.signOut();throw new Error('No role is assigned to this account in public.user_roles. Ask the administrator.')}role=q.data.role;$('loginScreen').classList.add('hidden');$('app').classList.remove('hidden');$('userInfo').textContent=`${user.email} · ${role}`;if(!canEdit())$('entryFields').style.opacity='.65';['addBtn','updateBtn','clearBtn','saveBalance','archiveBtn','restoreBtn','importFile'].forEach(id=>{if($(id))$(id).disabled=!canEdit()});$('deleteBtn').disabled=!isAdmin();await load();}catch(e){$('loginError').textContent=e.message||String(e)}finally{$('loginBtn').disabled=false}}
+async function login(){ $('loginError').textContent='';$('loginBtn').disabled=true;try{let {data,error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;user=data.user;let q=await sb.from('user_roles').select('role').eq('user_id',user.id).maybeSingle();if(q.error)throw q.error;if(!q.data?.role){await sb.auth.signOut();throw new Error('No role is assigned to this account in public.user_roles. Ask the administrator.')}role=q.data.role;$('loginScreen').classList.add('hidden');$('app').classList.remove('hidden');$('userInfo').textContent=`${user.email} · ${role}`;if(!canEdit())$('entryFields').style.opacity='.65';['addBtn','updateBtn','clearBtn','saveBalance','archiveBtn','restoreBtn','importFile'].forEach(id=>{if($(id))$(id).disabled=!canEdit()});$('deleteBtn').disabled=!isAdmin();await load();if(isAdmin())tuskerAddMfaButton();}catch(e){$('loginError').textContent=e.message||String(e)}finally{$('loginBtn').disabled=false}}
 function render(){let s=$('searchBox').value.toLowerCase(),status=$('statusFilter').value,from=$('fromDate').value,to=$('toDate').value,min=$('minReleased').value,dupOnly=$('showDuplicates').checked;let current=rows.filter(r=>Number(r.archived||0)===(showArchived?1:0));let keys=new Map();rows.forEach(r=>{let k=[r.customer_name,r.cheque_no,r.cheque_date,r.paid_amount,r.receipt_amount].map(x=>String(x??'').trim().toLowerCase()).join('|');if(k.replaceAll('|',''))keys.set(k,(keys.get(k)||0)+1)});let duplicateIds=new Set();rows.forEach(r=>{let k=[r.customer_name,r.cheque_no,r.cheque_date,r.paid_amount,r.receipt_amount].map(x=>String(x??'').trim().toLowerCase()).join('|');if(k.replaceAll('|','')&&(keys.get(k)>1))duplicateIds.add(r.id)});filtered=current.filter(r=>{let text=fields.map(([k])=>k==='status'&&r[k]==='Sing HO'?'Sign HO':r[k]).join(' ').toLowerCase();return(!s||text.includes(s))&&(!status||(r.status==='Sing HO'?'Sign HO':r.status)===status)&&(!from||r.transaction_date>=from)&&(!to||r.transaction_date<=to)&&(min===''||releasedValue(r)>num(min))&&(!dupOnly||duplicateIds.has(r.id))&&fields.every(([k])=>!columnFilters[k]||columnFilters[k].includes(k==='status'&&r[k]==='Sing HO'?'Sign HO':String(r[k]??'')))});filtered.sort((a,b)=>{let av=a[sortKey]??'',bv=b[sortKey]??'';let c=typeof av==='number'||typeof bv==='number'?num(av)-num(bv):String(av).localeCompare(String(bv));return c*sortDir});
 let hr=$('headRow');hr.innerHTML='<th><input id="headCheck" type="checkbox" title="Check visible rows"></th><th>ID</th>'+fields.map(([k,label])=>`<th>${esc(label)} <button data-sort="${k}" title="Sort">↕</button><button data-filter="${k}" title="Filter this column" style="background:${columnFilters[k]?'#ffe4ef':'#515967'};color:${columnFilters[k]?'#28202a':'white'}">▼</button></th>`).join('');hr.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{sortKey=b.dataset.sort;sortDir*=-1;render()});hr.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>openColumnFilter(b.dataset.filter));$('headCheck').onchange=e=>{filtered.forEach(r=>e.target.checked?checked.add(r.id):checked.delete(r.id));render()};$('tbody').innerHTML=filtered.map(r=>`<tr data-id="${r.id}" class="${duplicateIds.has(r.id)?'duplicate ':''}${r.archived?'archived ':''}${selectedId===r.id?'selected-row':''}" tabindex="0"><td><input type="checkbox" data-check="${r.id}" ${checked.has(r.id)?'checked':''}></td><td>${r.id}</td>${fields.map(([k])=>`<td>${esc(k==='status'&&r[k]==='Sing HO'?'Sign HO':amountFields.includes(k)?money(k==='released_amount'?releasedValue(r):r[k]):r[k]??'')}</td>`).join('')}</tr>`).join('');$('tbody').querySelectorAll('tr').forEach(tr=>{tr.onclick=e=>{if(e.target.type==='checkbox')return;let r=rows.find(x=>String(x.id)===tr.dataset.id);if(r)fillForm(r)};tr.onkeydown=e=>{if(e.key==='Enter'){let r=rows.find(x=>String(x.id)===tr.dataset.id);if(r)fillForm(r)}if(e.key===' '&&e.target===tr){e.preventDefault();let cb=tr.querySelector('[data-check]');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}))}};tr.querySelector('[data-check]').onchange=e=>{e.target.checked?checked.add(Number(tr.dataset.id)):checked.delete(Number(tr.dataset.id))}});let sums={released:filtered.reduce((a,r)=>a+releasedValue(r),0),receipt:filtered.reduce((a,r)=>a+num(r.receipt_amount),0),paid:filtered.reduce((a,r)=>a+num(r.paid_amount),0)};$('tfoot').innerHTML=`<tr class="total-row"><td colspan="7">Filtered totals</td><td>${money(sums.released)}</td><td>${money(sums.receipt)}</td><td>${money(sums.paid)}</td><td colspan="2"></td></tr>`;$('rowCount').textContent=`${filtered.length} transactions · ${showArchived?'Archived':'Active'} · ${role}`;$('filteredTotals').textContent=`Released: ${money(sums.released)} | Receipt: ${money(sums.receipt)} | Paid: ${money(sums.paid)}`;let total=rows.filter(r=>!r.archived&&r.status!=='Cleared').reduce((a,r)=>a+releasedValue(r),0);$('totalReleased').textContent=money(total);$('availableBalance').textContent=money(num($('bankBalance').value)-total);$('statusFilter').innerHTML='<option value="">All statuses</option>'+['Cleared','Sign Tusker','Sign HO','Tusker','HO','Released','Released to Customer','To be Released'].map(x=>`<option>${x}</option>`).join('');$('statusFilter').value=status;}
 async function saveBalance(){if(!canEdit())return;let {error}=await sb.from('settings').upsert({key:'bank_balance',value:String(num($('bankBalance').value))},{onConflict:'key'});if(error)return alert(error.message);render();alert('Bank balance saved.')}
@@ -415,5 +415,69 @@ $('forgotLink').onclick=e=>{e.preventDefault();alert('For username or password a
     button.setAttribute('aria-pressed',String(tableMode));
   });
 })();
+</script>
+<style id="tusker-mfa-style">
+#tusker-mfa-overlay{position:fixed;inset:0;z-index:100001;background:#101318bb;display:grid;place-items:center;padding:18px}
+#tusker-mfa-dialog{width:min(480px,100%);background:#383D43;color:#E8EAED;border:1px solid #59616A;border-radius:14px;padding:24px;box-shadow:0 18px 55px #0009}
+#tusker-mfa-dialog h2{margin:0 0 12px;font-size:21px}#tusker-mfa-dialog p{line-height:1.5;color:#E8EAED}
+#tusker-mfa-dialog label{display:block;color:#E8EAED;margin:12px 0 6px}#tusker-mfa-dialog input{width:100%;background:#454B52;color:white}
+#tusker-mfa-dialog .mfa-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
+#tusker-mfa-dialog .mfa-secret{word-break:break-all;padding:12px;background:#24282D;border-radius:8px;font-family:monospace;user-select:all}
+#tusker-mfa-dialog button{background:#398F88;color:white}#tusker-mfa-dialog button.secondary{background:#474D54;color:white}
+#tusker-mfa-error{color:#FFB8B8!important;min-height:1em}
+@media print{#tusker-mfa-overlay{display:none!important}}
+</style>
+<script id="tusker-mfa-script">
+/* MFA setup only. Account management requires a separately secured server endpoint. */
+function tuskerAddMfaButton(){
+ if(document.getElementById('tuskerMfaBtn'))return;
+ const bar=document.querySelector('#app .top .toolbar');if(!bar)return;
+ const btn=document.createElement('button');btn.id='tuskerMfaBtn';btn.className='secondary';btn.type='button';btn.textContent='Administrator MFA';
+ btn.onclick=tuskerOpenMfa;bar.insertBefore(btn,document.getElementById('signOutBtn'));
+}
+async function tuskerOpenMfa(){
+ const {data:{user:currentUser},error:userError}=await sb.auth.getUser();
+ if(userError||!currentUser||!user||currentUser.id!==user.id||!isAdmin()){alert('Administrator sign-in required.');return}
+ if(document.getElementById('tusker-mfa-overlay'))return;
+ const overlay=document.createElement('div');overlay.id='tusker-mfa-overlay';
+ const dialog=document.createElement('div');dialog.id='tusker-mfa-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Administrator MFA');
+ const h=document.createElement('h2');h.textContent='Administrator MFA';
+ const info=document.createElement('p');const secret=document.createElement('div');secret.className='mfa-secret';secret.hidden=true;
+ const label=document.createElement('label');label.textContent='6-digit authenticator code';label.hidden=true;
+ const code=document.createElement('input');code.inputMode='numeric';code.autocomplete='one-time-code';code.maxLength=6;code.placeholder='000000';code.hidden=true;
+ const err=document.createElement('p');err.id='tusker-mfa-error';err.setAttribute('role','alert');
+ const actions=document.createElement('div');actions.className='mfa-actions';
+ const cancel=document.createElement('button');cancel.className='secondary';cancel.textContent='Close';
+ const proceed=document.createElement('button');proceed.textContent='Continue';
+ let factorId=null,mode='';let busy=false;
+ const close=()=>{overlay.remove();};cancel.onclick=close;
+ const fail=e=>{err.textContent=e?.message||String(e)};
+ async function check(){
+  err.textContent='';const result=await sb.auth.mfa.listFactors();if(result.error)throw result.error;
+  const verified=(result.data?.totp||[]).filter(f=>f.status==='verified');
+  if(verified.length){factorId=verified[0].id;mode='verify';info.textContent='Your authenticator is enrolled. Enter its current code to verify your identity.';label.hidden=code.hidden=false;secret.hidden=true;proceed.textContent='Verify MFA';}
+  else{mode='enroll';info.textContent='Set up an authenticator app for this Administrator account. Keep the setup secret private. This does not yet activate in-app user management.';label.hidden=code.hidden=true;secret.hidden=true;proceed.textContent='Set up authenticator';}
+ }
+ proceed.onclick=async()=>{
+  if(busy)return;busy=true;proceed.disabled=true;err.textContent='';
+  try{
+   if(mode==='enroll'){
+    const r=await sb.auth.mfa.enroll({factorType:'totp',friendlyName:'Tusker Administrator'});if(r.error)throw r.error;
+    factorId=r.data.id;mode='confirm';secret.textContent=r.data.totp.secret;secret.hidden=false;
+    info.textContent='In Google Authenticator or Microsoft Authenticator, add an account using the setup key below. Then enter the six-digit code to confirm enrollment. Do not share the setup key.';
+    label.hidden=code.hidden=false;proceed.textContent='Confirm enrollment';code.focus();
+   }else if(mode==='confirm'||mode==='verify'){
+    if(!/^\d{6}$/.test(code.value.trim()))throw new Error('Enter a six-digit code.');
+    const challenge=await sb.auth.mfa.challenge({factorId});if(challenge.error)throw challenge.error;
+    const result=await sb.auth.mfa.verify({factorId,challengeId:challenge.data.id,code:code.value.trim()});if(result.error)throw result.error;
+    mode='done';secret.hidden=label.hidden=code.hidden=true;
+    info.textContent='MFA verified successfully. Administrator user-management actions will become available after a protected Supabase Edge Function is configured. No user accounts were changed.';
+    proceed.textContent='Done';
+   }else close();
+  }catch(e){fail(e)}finally{busy=false;proceed.disabled=false}
+ };
+ actions.append(cancel,proceed);dialog.append(h,info,secret,label,code,err,actions);overlay.append(dialog);document.body.append(overlay);
+ check().catch(fail);
+}
 </script>
 </body></html>
