@@ -564,8 +564,8 @@ async function tuskerOpenMfa(){
    const inviteTitle=document.createElement('h3');inviteTitle.textContent='Create New User';
    const emailLabel=document.createElement('label');emailLabel.textContent='Email address';
    const emailInput=document.createElement('input');emailInput.type='email';emailInput.required=true;emailInput.autocomplete='off';emailInput.placeholder='user@example.com';emailInput.maxLength=254;emailLabel.append(emailInput);
-   const passwordLabel=document.createElement('label');passwordLabel.textContent='Initial password (12+ characters, letters and numbers)';
-   const passwordInput=document.createElement('input');passwordInput.type='password';passwordInput.required=true;passwordInput.minLength=12;passwordInput.maxLength=128;passwordInput.autocomplete='new-password';passwordLabel.append(passwordInput);
+   const passwordLabel=document.createElement('label');passwordLabel.textContent='Initial password (8+ characters, letters and numbers)';
+   const passwordInput=document.createElement('input');passwordInput.type='password';passwordInput.required=true;passwordInput.minLength=8;passwordInput.maxLength=128;passwordInput.autocomplete='new-password';passwordLabel.append(passwordInput);
    const showCreatePassword=document.createElement('label');showCreatePassword.className='tusker-password-toggle';
    const createCheck=document.createElement('input');createCheck.type='checkbox';
    showCreatePassword.append(createCheck,document.createTextNode(' Show password'));
@@ -607,8 +607,8 @@ async function tuskerOpenMfa(){
              const box=document.createElement('div');box.className='modal';box.style.zIndex='100005';
              const inner=document.createElement('div');inner.className='modalbox';inner.style.maxWidth='480px';
              const heading=document.createElement('h3');heading.textContent='Reset password — '+(u.email||'user');
-             const label=document.createElement('label');label.textContent='New temporary password (12+ characters, letters and numbers)';
-             const field=document.createElement('input');field.type='password';field.autocomplete='new-password';field.style.width='100%';field.minLength=12;field.maxLength=128;label.append(field);
+             const label=document.createElement('label');label.textContent='New temporary password (8+ characters, letters and numbers)';
+             const field=document.createElement('input');field.type='password';field.autocomplete='new-password';field.style.width='100%';field.minLength=8;field.maxLength=128;label.append(field);
              const showReset=document.createElement('label');showReset.className='tusker-password-toggle';
              const resetCheck=document.createElement('input');resetCheck.type='checkbox';
              showReset.append(resetCheck,document.createTextNode(' Show password'));
@@ -620,7 +620,7 @@ async function tuskerOpenMfa(){
              buttons.append(cancel,save);inner.append(heading,label,showReset,buttons);box.append(inner);document.body.append(box);field.focus();
            });
            if(newPassword===null)return;
-           if(newPassword.length<12||newPassword.length>128||!/[A-Za-z]/.test(newPassword)||!/[0-9]/.test(newPassword)){alert('Password must be 12–128 characters and contain letters and numbers.');return;}
+           if(newPassword.length<8||newPassword.length>128||!/[A-Za-z]/.test(newPassword)||!/[0-9]/.test(newPassword)){alert('Password must be 8–128 characters and contain letters and numbers.');return;}
            if(!await tuskerConfirm('Reset the password for '+(u.email||'this account')+'? Give the new password to the user privately.','Reset User Password','Reset Password'))return;
            resetBtn.disabled=true;
            try{
