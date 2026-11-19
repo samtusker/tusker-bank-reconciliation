@@ -819,13 +819,25 @@ async function bulkUpdate(){
 }
 bulkButton.addEventListener('click',bulkUpdate);
 function dateInRange(r,from,to){const d=String(r.transaction_date||'');return(!from||d>=from)&&(!to||d<=to);}
-function aggregate(type,period,from,to,includeArchived){
- const source=rows.filter(r=>(includeArchived||!Number(r.archived||0))&&dateInRange(r,from,to));
+function aggregate(type,period,from,to,includeArchived,transactionType,debitMin,debitMax,creditMin,creditMax){
+ const source=rows.filter(r=>{
+  if(!includeArchived&&Number(r.archived||0))return false;
+  if(!dateInRange(r,from,to))return false;
+  // Tusker register: Paid Amount = debit/payment; Receipt Amount = credit/receipt.
+  const debit=num(r.paid_amount),credit=num(r.receipt_amount);
+  if(transactionType==='payment'&&!(debit>0))return false;
+  if(transactionType==='receipt'&&!(credit>0))return false;
+  if(debitMin!==null&&debit<debitMin)return false;
+  if(debitMax!==null&&debit>debitMax)return false;
+  if(creditMin!==null&&credit<creditMin)return false;
+  if(creditMax!==null&&credit>creditMax)return false;
+  return true;
+ });
  const groups=new Map();
  for(const r of source){
   const key=type==='customer'?(String(r.customer_name||'').trim()||'(Blank customer)'):type==='status'?(String(r.status||'').trim()||'(Blank status)'):(period==='year'?String(r.transaction_date||'').slice(0,4):period==='month'?String(r.transaction_date||'').slice(0,7):String(r.transaction_date||'').slice(0,10))||'(No date)';
   if(!groups.has(key))groups.set(key,{name:key,count:0,released:0,debit:0,credit:0});
-  const g=groups.get(key);g.count++;g.released+=releasedValue(r);g.debit+=num(r.receipt_amount);g.credit+=num(r.paid_amount);
+  const g=groups.get(key);g.count++;g.released+=releasedValue(r);g.debit+=num(r.paid_amount);g.credit+=num(r.receipt_amount);
  }
  return [...groups.values()].sort((a,b)=>type==='date'?a.name.localeCompare(b.name):b.count-a.count||a.name.localeCompare(b.name));
 }
@@ -837,8 +849,14 @@ function reportData(){
  const from=document.getElementById('tuskerReportFrom').value;
  const to=document.getElementById('tuskerReportTo').value;
  const archived=document.getElementById('tuskerReportArchived').checked;
+ const transactionType=document.getElementById('tuskerReportTransactionType').value;
+ function amountFilter(id){const raw=document.getElementById(id).value.trim();if(raw==='')return null;const n=Number(raw);if(!Number.isFinite(n)||n<0)throw new Error('Amount filters must be valid non-negative numbers.');return n;}
+ const debitMin=amountFilter('tuskerReportDebitMin'),debitMax=amountFilter('tuskerReportDebitMax');
+ const creditMin=amountFilter('tuskerReportCreditMin'),creditMax=amountFilter('tuskerReportCreditMax');
  if(from&&to&&from>to)throw new Error('From date cannot be after To date.');
- return {type,period,from,to,archived,items:aggregate(type,period,from,to,archived)};
+ if(debitMin!==null&&debitMax!==null&&debitMin>debitMax)throw new Error('Debit minimum cannot exceed debit maximum.');
+ if(creditMin!==null&&creditMax!==null&&creditMin>creditMax)throw new Error('Credit minimum cannot exceed credit maximum.');
+ return {type,period,from,to,archived,transactionType,debitMin,debitMax,creditMin,creditMax,items:aggregate(type,period,from,to,archived,transactionType,debitMin,debitMax,creditMin,creditMax)};
 }
 function reportRows(){
  try{
@@ -863,20 +881,20 @@ function exportReport(){
 }
 function printReport(){
  try{
- const {type,from,to}=reportData();
+ const {type,from,to,transactionType,debitMin,debitMax,creditMin,creditMax}=reportData();
  const table=document.getElementById('tuskerReportTable').outerHTML;
  const w=window.open('','_blank');if(!w)throw new Error('Allow pop-ups to print the report.');
- w.document.write('<!doctype html><html><head><title>Tusker Report</title><style>body{font:12px Arial;padding:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:7px;text-align:left}th{background:#eee}</style></head><body><h2>Tusker Bank Reconciliation — '+esc(type)+' report</h2><p>From: '+esc(from||'All')+' | To: '+esc(to||'All')+'</p>'+table+'<scr'+'ipt>window.onload=function(){window.print()}<'+'/script></body></html>');w.document.close();
+ w.document.write('<!doctype html><html><head><title>Tusker Report</title><style>body{font:12px Arial;padding:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:7px;text-align:left}th{background:#eee}</style></head><body><h2>Tusker Bank Reconciliation — '+esc(type)+' report</h2><p>From: '+esc(from||'All')+' | To: '+esc(to||'All')+' | Type: '+esc(transactionType)+' | Debit: '+esc(debitMin??'Any')+'–'+esc(debitMax??'Any')+' | Credit: '+esc(creditMin??'Any')+'–'+esc(creditMax??'Any')+'</p>'+table+'<scr'+'ipt>window.onload=function(){window.print()}<'+'/script></body></html>');w.document.close();
  }catch(e){alert(e.message);}
 }
 function openReports(){
  if(reportDialog)return;
  const root=document.createElement('div');root.id='tuskerReportsDialog';reportDialog=root;
- root.innerHTML='<section class="reports-window" role="dialog" aria-modal="true" aria-label="Advanced Reports"><div class="reports-top"><h2>Advanced Reports</h2><button type="button" id="tuskerReportClose" class="secondary">Close</button></div><div class="reports-controls"><label>Group by<select id="tuskerReportType"><option value="customer">Customer-wise</option><option value="status">Status-wise</option><option value="date">Date-wise</option></select></label><label id="tuskerReportPeriodLabel" style="display:none">Date grouping<select id="tuskerReportPeriod"><option value="day">Daily</option><option value="month">Monthly</option><option value="year">Yearly</option></select></label><label>From date<input id="tuskerReportFrom" type="date"></label><label>To date<input id="tuskerReportTo" type="date"></label><label style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="tuskerReportArchived"> Include archived</label><button id="tuskerReportExcel" type="button">Export Excel</button><button id="tuskerReportPrint" type="button" class="secondary">Print Preview</button></div><p id="tuskerReportCount" class="note"></p><div class="reports-table-wrap"><table id="tuskerReportTable"></table></div><p class="note">Totals use the existing Tusker Released Amount calculation. Debit = Receipt Amount; Credit = Paid Amount, matching the register headings.</p></section>';
+ root.innerHTML='<section class="reports-window" role="dialog" aria-modal="true" aria-label="Advanced Reports"><div class="reports-top"><h2>Advanced Reports</h2><button type="button" id="tuskerReportClose" class="secondary">Close</button></div><div class="reports-controls"><label>Group by<select id="tuskerReportType"><option value="customer">Customer-wise</option><option value="status">Status-wise</option><option value="date">Date-wise</option></select></label><label id="tuskerReportPeriodLabel" style="display:none">Date grouping<select id="tuskerReportPeriod"><option value="day">Daily</option><option value="month">Monthly</option><option value="year">Yearly</option></select></label><label>From date<input id="tuskerReportFrom" type="date"></label><label>To date<input id="tuskerReportTo" type="date"></label><label>Transaction type<select id="tuskerReportTransactionType"><option value="all">All transactions</option><option value="payment">Payments (Debit)</option><option value="receipt">Receipts (Credit)</option></select></label><label>Debit min (AED)<input id="tuskerReportDebitMin" type="number" min="0" step="0.01" placeholder="Any"></label><label>Debit max (AED)<input id="tuskerReportDebitMax" type="number" min="0" step="0.01" placeholder="Any"></label><label>Credit min (AED)<input id="tuskerReportCreditMin" type="number" min="0" step="0.01" placeholder="Any"></label><label>Credit max (AED)<input id="tuskerReportCreditMax" type="number" min="0" step="0.01" placeholder="Any"></label><label style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="tuskerReportArchived"> Include archived</label><button id="tuskerReportExcel" type="button">Export Excel</button><button id="tuskerReportPrint" type="button" class="secondary">Print Preview</button></div><p id="tuskerReportCount" class="note"></p><div class="reports-table-wrap"><table id="tuskerReportTable"></table></div><p class="note">Totals use the existing Tusker Released Amount calculation. Debit = Paid Amount (payments); Credit = Receipt Amount (receipts), matching the register headings.</p></section>';
  document.body.append(root);
  root.querySelector('#tuskerReportClose').onclick=closeReports;
  root.addEventListener('click',e=>{if(e.target===root)closeReports();});
- ['tuskerReportType','tuskerReportPeriod','tuskerReportFrom','tuskerReportTo','tuskerReportArchived'].forEach(id=>document.getElementById(id).addEventListener('change',reportRows));
+ ['tuskerReportType','tuskerReportPeriod','tuskerReportFrom','tuskerReportTo','tuskerReportArchived','tuskerReportTransactionType','tuskerReportDebitMin','tuskerReportDebitMax','tuskerReportCreditMin','tuskerReportCreditMax'].forEach(id=>document.getElementById(id).addEventListener('input',reportRows));
  root.querySelector('#tuskerReportExcel').onclick=exportReport;root.querySelector('#tuskerReportPrint').onclick=printReport;
  reportRows();root.querySelector('#tuskerReportClose').focus();
 }
