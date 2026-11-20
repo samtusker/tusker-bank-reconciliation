@@ -311,8 +311,7 @@ function tuskerShowRecoveryHelp(){
  for(const message of [
    'Contact your Tusker Administrator through sam@tusker.ae.',
    'Provide your registered email address, or request help identifying your login email. Never share your current password or MFA code.',
-   'The Administrator will verify your identity through an approved company process.',
-   'After signing in and completing MFA, the Administrator can open User Control and assign a new password. Sign in using the new password.'
+   'The Administrator will verify your identity and assign a new password. Sign in using the new password.'
  ]){const li=document.createElement('li');li.textContent=message;steps.appendChild(li);}
  const close=document.createElement('button');close.type='button';close.textContent='Back to Login';
  const previous=document.activeElement;
