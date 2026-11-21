@@ -993,7 +993,7 @@ function parse(wb){
   const idx=grid.findIndex(r=>r.some(c=>norm(c)==='particulars')&&r.some(c=>norm(c).includes('instrument no'))&&r.some(c=>norm(c)==='credit'));
   if(idx<0){issues.push(`${sheetName}: Tally transaction header not found`);continue}
   const hdr=grid[idx].map(norm),find=(...names)=>hdr.findIndex(h=>names.includes(h));
-  const at={date:find('date'),party:find('particulars'),voucher:find('vch type','voucher type'),instrument:find('instrument no.','instrument no'),instrumentDate:find('instrument date'),bankDate:find('bank date'),debit:find('debit'),credit:find('credit')};
+  const at={date:find('date'),party:find('particulars'),voucher:find('vch type','voucher type'),transactionType:find('transaction type'),instrument:find('instrument no.','instrument no'),instrumentDate:find('instrument date'),bankDate:find('bank date'),debit:find('debit'),credit:find('credit')};
   if(Object.values(at).some(x=>x<0)){issues.push(`${sheetName}: required columns missing`);continue}
   for(let i=idx+1;i<grid.length;i++){
    const a=grid[i],get=k=>a[at[k]]??'';
@@ -1003,14 +1003,19 @@ function parse(wb){
    const receipt=/^(brv|crv)(\b|\s|-)/i.test(voucher)||voucher.includes('receipt')||voucher.includes('bank receipt')||voucher.includes('cash receipt');
    if(!payment&&!receipt)continue; // ignore headings, balances and summary rows
    const date=iso(get('date')),chequeDate=iso(get('instrumentDate'));
-   const rawNo=get('instrument');const cheque=String(rawNo??'').trim();
+   const rawNo=get('instrument');
+   // When the instrument is blank, use Bank Chgs for bank charges; otherwise the Transaction Type column (D).
+   // Retain the original instrument exactly when supplied (including leading zeroes).
+   const particulars=String(get('party')??'').trim();
+   const transactionType=String(get('transactionType')??'').trim();
+   const cheque=String(rawNo??'').trim() || (/\bbank\s*(?:charges?|chgs?)\b/i.test(particulars)?'Bank Chgs':transactionType);
    const debit=amount(get('debit')),credit=amount(get('credit'));
    const paid=payment?credit:0,received=receipt?debit:0;
    const problems=[];
    if(!date)problems.push('Missing/invalid transaction date');
    if(!chequeDate)problems.push('Missing/invalid instrument date');
    if(!norm(get('party')))problems.push('Missing particulars');
-   if(!cheque)problems.push('Missing instrument number (manual review required; cash transactions are not automatically imported)');
+   if(!cheque)problems.push('Missing instrument number and Transaction Type (column D)');
    if(!Number.isFinite(paid)||!Number.isFinite(received)||paid<0||received<0||paid+received<=0)problems.push('Invalid or zero amount');
    if(payment&&debit>0)problems.push('Payment has a Tally debit value');
    if(receipt&&credit>0)problems.push('Receipt has a Tally credit value');
