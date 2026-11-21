@@ -997,7 +997,10 @@ function parse(wb){
   if(Object.values(at).some(x=>x<0)){issues.push(`${sheetName}: required columns missing`);continue}
   for(let i=idx+1;i<grid.length;i++){
    const a=grid[i],get=k=>a[at[k]]??'';
-   const voucher=norm(get('voucher')),payment=voucher.includes('bank payment'),receipt=voucher.includes('receipt');
+   const voucher=norm(get('voucher'));
+   // Tally voucher abbreviations: BPV/CPV = payment, BRV/CRV = receipt.
+   const payment=/^(bpv|cpv)(\b|\s|-)/i.test(voucher)||voucher.includes('bank payment')||voucher.includes('cash payment')||voucher.includes('payment voucher');
+   const receipt=/^(brv|crv)(\b|\s|-)/i.test(voucher)||voucher.includes('receipt')||voucher.includes('bank receipt')||voucher.includes('cash receipt');
    if(!payment&&!receipt)continue; // ignore headings, balances and summary rows
    const date=iso(get('date')),chequeDate=iso(get('instrumentDate'));
    const rawNo=get('instrument');const cheque=String(rawNo??'').trim();
@@ -1007,7 +1010,7 @@ function parse(wb){
    if(!date)problems.push('Missing/invalid transaction date');
    if(!chequeDate)problems.push('Missing/invalid instrument date');
    if(!norm(get('party')))problems.push('Missing particulars');
-   if(!cheque)problems.push('Missing instrument number');
+   if(!cheque)problems.push('Missing instrument number (manual review required; cash transactions are not automatically imported)');
    if(!Number.isFinite(paid)||!Number.isFinite(received)||paid<0||received<0||paid+received<=0)problems.push('Invalid or zero amount');
    if(payment&&debit>0)problems.push('Payment has a Tally debit value');
    if(receipt&&credit>0)problems.push('Receipt has a Tally credit value');
