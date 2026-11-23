@@ -405,7 +405,7 @@ function tuskerShowRecoveryHelp(){
 #tallyImportOverlay .tally-table{overflow:auto;max-height:44vh}#tallyImportOverlay .tally-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}#tallyImportOverlay .tally-kpis{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}#tallyImportOverlay .tally-kpis span{padding:10px;border:1px solid var(--line,#555);border-radius:8px}
 </style><style id="tusker-opposite-search-highlight">
 /* Emphasize the OTHER location only when it has search matches. */
-#archiveViewBtn.tusker-opposite-search-match {
+#archiveViewBtn.tusker-opposite-search-match, #releaseHistoryModal button.tusker-opposite-search-match {
   color: #fff !important;
   background: #a51d2d !important;
   border: 2px solid #f0a6af !important;
@@ -1133,17 +1133,25 @@ const m=modal(reviewer()?'Release Requests':'My Release Requests');m.root.id='re
 const tabs=document.createElement('div');tabs.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin:16px 0';m.box.append(tabs);
 const states=['Pending','Approved','Rejected','Cancelled'];let state='Pending',page=0,epoch=0;const pageSize=50;
 const tabButtons={};for(const status of states){tabButtons[status]=button(tabs,status,()=>{if(!busy){state=status;page=0;refresh()}});}
+const search=document.createElement('input');search.type='search';search.placeholder='Search release requests across all tabs…';search.setAttribute('aria-label','Search release requests');search.style.cssText='width:100%;margin:0 0 8px';m.box.append(search);
 const msg=line(m.box,'Loading…');msg.setAttribute('role','status');const content=document.createElement('div');m.box.append(content);
 const fmt=value=>value?new Date(value).toLocaleString('en-GB',{timeZone:'Asia/Dubai',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})+' (UAE)':'—';
-async function refresh(){const token=++epoch;const selected=state;for(const status of states){const btn=tabButtons[status];btn.setAttribute('aria-pressed',String(status===selected));btn.style.fontWeight=status===selected?'bold':'normal';btn.style.outline=status===selected?'2px solid #2684ff':'';btn.disabled=busy;}
+const norm=v=>String(v??'').toLowerCase();
+const match=(q,term)=>{const r=rows.find(x=>String(x.id)===String(q.transaction_id));return [q.id,q.transaction_id,q.request_status,q.requested_by,q.reviewed_by,q.request_remarks,q.review_remarks,fmt(q.requested_at),fmt(q.reviewed_at),r?.customer_name,r?.cheque_no,r?.cheque_date,r?.paid_amount,r?money(r.paid_amount):'',r?.narration].some(v=>norm(v).includes(term));};
+async function refresh(){const token=++epoch;const selected=state;const term=norm(search.value).trim();for(const status of states){const btn=tabButtons[status];btn.setAttribute('aria-pressed',String(status===selected));btn.style.fontWeight=status===selected?'bold':'normal';btn.style.outline=status===selected?'2px solid #2684ff':'';btn.disabled=busy;btn.classList.remove('tusker-opposite-search-match');btn.title='';}
 content.replaceChildren();msg.textContent='Loading '+selected.toLowerCase()+' requests…';
 try{
+let data,total;
+if(term){let all=[],offset=0;while(true){const result=await sb.from('cheque_release_requests').select('*').order('id',{ascending:true}).range(offset,offset+499);if(result.error)throw result.error;if(token!==epoch||!m.root.isConnected)return;all.push(...result.data);if(result.data.length<500)break;offset+=500;}
+const matches=all.filter(q=>match(q,term));for(const status of states){const n=matches.filter(q=>q.request_status===status).length;const btn=tabButtons[status];btn.textContent=`${status} (${n})`;btn.classList.toggle('tusker-opposite-search-match',status!==selected&&n>0);btn.title=`${n} matching request(s)`;}
+const subset=matches.filter(q=>q.request_status===selected).sort((a,b)=>String(b[selected==='Pending'?'requested_at':'reviewed_at']||'').localeCompare(String(a[selected==='Pending'?'requested_at':'reviewed_at']||''))||Number(b.id)-Number(a.id));total=subset.length;data=subset.slice(page*pageSize,(page+1)*pageSize);
+}else{
 const results=await Promise.all([sb.from('cheque_release_requests').select('*',{count:'exact'}).eq('request_status',selected).order(selected==='Pending'?'requested_at':'reviewed_at',{ascending:false,nullsFirst:false}).order('id',{ascending:false}).range(page*pageSize,page*pageSize+pageSize-1),...states.map(status=>sb.from('cheque_release_requests').select('id',{count:'exact',head:true}).eq('request_status',status))]);
-if(token!==epoch||!m.root.isConnected)return;const {data,error,count:total}=results[0];if(error)throw error;
-for(let i=0;i<states.length;i++){const result=results[i+1];tabButtons[states[i]].textContent=states[i]+(result.error?'':` (${result.count||0})`);}
+if(token!==epoch||!m.root.isConnected)return;if(results[0].error)throw results[0].error;data=results[0].data;total=results[0].count;
+for(let i=0;i<states.length;i++){const result=results[i+1];tabButtons[states[i]].textContent=states[i]+(result.error?'':` (${result.count||0})`);}}
 if(!data.length&&page>0){page--;return refresh();}
-msg.textContent=`${total||0} ${selected.toLowerCase()} request(s) · Page ${page+1}`;
-if(!data.length)line(content,'No '+selected.toLowerCase()+' requests.');
+msg.textContent=`${total||0} ${selected.toLowerCase()} ${term?'matching ':''}request(s) · Page ${page+1}`;
+if(!data.length)line(content,'No '+selected.toLowerCase()+' '+(term?'matching ':'')+'requests.');
 const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;margin:8px 0';content.append(wrap);
 const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:collapse;font-size:12px';wrap.append(table);
 const header=table.createTHead().insertRow();const reviewing=reviewer()&&selected==='Pending';
@@ -1157,7 +1165,7 @@ const decide=async approve=>{if(busy||!reviewer())return;if(!confirm(approve?'Ap
 const approve=button(actions,'Approve',()=>decide(true));approve.style.cssText='background:#15803d;color:white;padding:4px 7px;font-size:11px;margin-right:4px';approve.disabled=!r||!eligible(r);const reject=button(actions,'Reject',()=>decide(false));reject.style.cssText='border:1px solid #dc2626;color:#dc2626;padding:4px 7px;font-size:11px';}}
 const nav=document.createElement('div');nav.style.cssText='display:flex;gap:8px';content.append(nav);const prev=button(nav,'Previous',()=>{if(!busy&&page>0){page--;refresh()}});prev.disabled=page===0;const next=button(nav,'Next',()=>{if(!busy){page++;refresh()}});next.disabled=(page+1)*pageSize>=total;
 }catch(e){if(token===epoch)msg.textContent='Unable to load requests: '+(e.message||e);}}
-const reload=button(m.box,'Refresh',()=>{if(!busy){page=0;refresh();count().catch(()=>{})}});await refresh();};
+const controls=document.createElement('div');controls.style.cssText='display:flex;gap:8px;justify-content:flex-end;align-items:center';m.box.insertBefore(controls,tabs);const reload=button(controls,'Refresh',()=>{if(!busy){page=0;refresh();count().catch(()=>{})}});controls.append(m.close);let timer;search.addEventListener('input',()=>{clearTimeout(timer);++epoch;page=0;timer=setTimeout(()=>{if(!busy&&m.root.isConnected)refresh()},250)});await refresh();};
 const originalLoad=load;load=async function(...args){const result=await originalLoad.apply(this,args);count().catch(()=>{});return result};
 $('archiveViewBtn').addEventListener('click',visibility);visibility();setInterval(()=>{if(allowed()&&!document.hidden)count().catch(()=>{})},60000);
 })();
