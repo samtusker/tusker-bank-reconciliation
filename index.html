@@ -497,7 +497,7 @@ $('toggleTransactionEntry').style.display=entryAllowed?'':'none';
 $('transactionEntryPanel').style.display='none';
 $('toggleTransactionEntry').textContent='Show Transaction Entry';
 $('toggleTransactionEntry').setAttribute('aria-expanded','false');
-if($('tallyImportButton'))$('tallyImportButton').style.display=entryAllowed?'':'none';$('loginScreen').classList.add('hidden');$('app').classList.remove('hidden');$('userInfo').textContent=`${user.email} · ${role}`;if(!canEdit())$('entryFields').style.opacity='.65';['addBtn','updateBtn','clearBtn','saveBalance','archiveBtn','restoreBtn','importFile'].forEach(id=>{if($(id))$(id).disabled=!canEdit()});$('deleteBtn').disabled=!isAdmin();await load();if(isAdmin())tuskerAddMfaButton();}catch(e){$('loginError').textContent=e.message||String(e)}finally{$('loginBtn').disabled=false}}
+if($('tallyImportButton'))$('tallyImportButton').style.display=entryAllowed?'':'none';$('loginScreen').classList.add('hidden');$('app').classList.remove('hidden');$('userInfo').textContent=`${user.email} · ${role}`;if(!canEdit())$('entryFields').style.opacity='.65';['addBtn','updateBtn','clearBtn','saveBalance','archiveBtn','restoreBtn','importFile'].forEach(id=>{if($(id))$(id).disabled=!canEdit()});$('deleteBtn').disabled=!isAdmin();await load();if(isAdmin())tuskerAddMfaButton();if(typeof window.tuskerPendingLoginNotice==='function')window.tuskerPendingLoginNotice().catch(()=>{});}catch(e){$('loginError').textContent=e.message||String(e)}finally{$('loginBtn').disabled=false}}
 function updateOppositeLocationHighlight(activeCount,archivedCount,hasSearch){
   const button=$('archiveViewBtn');
   if(!button)return;
@@ -1169,6 +1169,18 @@ if(administrator()){const del=button(cell(''),'Delete',async()=>{if(busy||!admin
 const nav=document.createElement('div');nav.style.cssText='display:flex;gap:8px';content.append(nav);const prev=button(nav,'Previous',()=>{if(!busy&&page>0){page--;refresh()}});prev.disabled=page===0;const next=button(nav,'Next',()=>{if(!busy){page++;refresh()}});next.disabled=(page+1)*pageSize>=total;
 }catch(e){if(token===epoch)msg.textContent='Unable to load requests: '+(e.message||e);}}
 const controls=document.createElement('div');controls.style.cssText='display:flex;gap:8px;justify-content:flex-end;align-items:center';m.box.insertBefore(controls,tabs);const reload=button(controls,'Refresh',()=>{if(!busy){page=0;refresh();count().catch(()=>{})}});controls.append(m.close);let timer;search.addEventListener('input',()=>{clearTimeout(timer);++epoch;page=0;timer=setTimeout(()=>{if(!busy&&m.root.isConnected)refresh()},250)});await refresh();};
+window.tuskerPendingLoginNotice=async function(){
+ if(!reviewer())return;
+ const uid=user.id;
+ const {count:pending,error}=await sb.from('cheque_release_requests').select('id',{count:'exact',head:true}).eq('request_status','Pending');
+ if(error||!pending||!reviewer()||user.id!==uid||$('app').classList.contains('hidden')||document.getElementById('pendingReleaseLoginNotice'))return;
+ const m=modal('Pending Cheque Release Requests');m.root.id='pendingReleaseLoginNotice';m.root.setAttribute('role','dialog');m.root.setAttribute('aria-modal','true');m.root.setAttribute('aria-label','Pending Cheque Release Requests');m.box.style.width='min(460px,94vw)';m.close.remove();
+ const n=line(m.box,String(pending));n.style.cssText='font-size:36px;font-weight:bold;text-align:center;color:#d97706;margin:16px 0';
+ const info=line(m.box,`${pending} cheque release request${pending===1?' is':'s are'} awaiting your approval.`);info.style.textAlign='center';
+ const actions=document.createElement('div');actions.style.cssText='display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:20px';m.box.append(actions);
+ button(actions,'Remind Me Later',()=>m.root.remove());
+ const view=button(actions,'View Requests',()=>{m.root.remove();history.click()});view.style.cssText='background:#175ba6;color:white';view.focus();
+};
 const originalLoad=load;load=async function(...args){const result=await originalLoad.apply(this,args);count().catch(()=>{});return result};
 $('archiveViewBtn').addEventListener('click',visibility);visibility();setInterval(()=>{if(allowed()&&!document.hidden)count().catch(()=>{})},60000);
 })();
