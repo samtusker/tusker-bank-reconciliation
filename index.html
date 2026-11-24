@@ -508,12 +508,22 @@ function updateOppositeLocationHighlight(activeCount,archivedCount,hasSearch){
   button.setAttribute('aria-label',highlight?`${button.textContent}. ${otherCount} matching transaction(s) found there`:button.textContent);
 }
 function tuskerDuplicateIds(records){
- const normCheque=v=>{const s=String(v??'').trim().toLowerCase();return /^\d+$/.test(s)?s.replace(/^0+(?=\d)/,''):s;};
- const normName=v=>String(v??'').toLowerCase().normalize('NFKC').replace(/\bl\s*\.\s*l\s*\.\s*c\b\.?/g,'llc').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).map(w=>({trdg:'trading',engg:'engineering',est:'establishment'}[w]||w)).filter(w=>!['llc','ltd','fzc','fzco','limited'].includes(w)).join(' ');
- const similar=(a,b)=>{if(!a||!b)return false;if(a===b)return true;if(Math.min(a.length,b.length)<5)return false;let prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=next;}return 1-prev[b.length]/Math.max(a.length,b.length)>=0.85;};
  const groups=new Map(), result=new Set();
- for(const r of records){const cheque=normCheque(r.cheque_no), paid=Number(r.paid_amount), receipt=Number(r.receipt_amount);if(!Number.isFinite(paid)||!Number.isFinite(receipt))continue;const key=JSON.stringify([cheque,paid,receipt,cheque&&cheque!=='0'?'':String(r.cheque_date??'').trim()]);const name=normName(r.customer_name);if(!groups.has(key))groups.set(key,[]);groups.get(key).push({r,name});}
- for(const group of groups.values()){group.sort((a,b)=>Number(b.r.archived||0)-Number(a.r.archived||0)||Number(a.r.id)-Number(b.r.id));for(let i=0;i<group.length;i++){const x=group[i];if(Number(x.r.archived||0)!==0)continue;for(let j=0;j<i;j++){const y=group[j];if(similar(x.name,y.name)){result.add(x.r.id);break;}}}}
+ for(const r of records){
+  const raw=String(r.cheque_no??'').trim();
+  if(!/^\d+$/.test(raw))continue;
+  const cheque=raw.replace(/^0+/,'');
+  if(!cheque)continue;
+  const paid=Number(r.paid_amount), receipt=Number(r.receipt_amount);
+  if(!Number.isFinite(paid)||!Number.isFinite(receipt)||(paid===0&&receipt===0))continue;
+  const key=JSON.stringify([cheque,paid,receipt]);
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(r);
+ }
+ for(const group of groups.values()){
+  group.sort((a,b)=>Number(b.archived||0)-Number(a.archived||0)||Number(a.id)-Number(b.id));
+  for(let i=1;i<group.length;i++)if(Number(group[i].archived||0)===0)result.add(group[i].id);
+ }
  return result;
 }
 function render(){let s=$('searchBox').value.toLowerCase(),status=$('statusFilter').value,from=$('fromDate').value,to=$('toDate').value,min=$('minReleased').value,dupOnly=$('showDuplicates').checked;let locationPanel=$('tuskerSearchLocations');
